@@ -12,15 +12,15 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/bluetooth/addr.h>
 /* STEP 1 - Include the header file for managing Bluetooth LE Connections */
-
+#include <zephyr/bluetooth/conn.h>
 /* STEP 8.2 - Include the header file for the LED Button Service */
-
+#include<bluetooth/services/lbs.h>
 #include <dk_buttons_and_leds.h>
 
 #define USER_BUTTON DK_BTN1_MSK
 #define RUN_STATUS_LED DK_LED1
 /* STEP 3.1 - Define an LED to show the connection status */
-
+#define CONNECTION_STATUS_LED   DK_LED2
 #define RUN_LED_BLINK_INTERVAL 1000
 
 struct bt_conn *my_conn = NULL;
@@ -48,16 +48,58 @@ static const struct bt_data sd[] = {
 };
 
 /* STEP 2.2 - Implement the callback functions */
+void on_connected(struct bt_conn *conn, uint8_t err)
+{
 
+	if (err) {
+		LOG_ERR("Connection error (err %d)", err);
+		return;
+	}
+	LOG_INF("Connected");
+	my_conn=bt_conn_ref(conn);
+	/* STEP 3.2 Turn on the connection status LED*/
+	dk_set_led(CONNECTION_STATUS_LED, 1);
+}
+
+void on_disconnected(struct bt_conn *conn, uint8_t reason)
+{
+
+	LOG_INF("Disconnected. Reason %d",reason);
+	bt_conn_unref(my_conn);
+/* STEP 3.2 Turn off the connection status LED*/
+	dk_set_led(CONNECTION_STATUS_LED, 0);
+}
 /* STEP 2.1 - Declare the connection_callback structure */
+struct bt_conn_cb connection_callbacks = {
+
+	.connected             =  on_connected,
+	.disconnected          =  on_disconnected,
+};
 
 /* STEP 8.3 - Send a notification using the LBS characteristic. */
+
+static void button_changed(uint32_t button_state,uint32_t has_changed){
+
+	int err;
+	if(has_changed & USER_BUTTON){
+		LOG_INF("Button changed");
+		
+		err=bt_lbs_send_button_state(button_state ? true:false);
+		if(err){
+			LOG_ERR("Couldn't send the notification. err: %d",err);
+		}
+	}
+}
 
 static int init_button(void)
 {
 	int err = 0;
 	/* STEP 8.4 - Complete the implementation of the init_button() function. */
-
+	err = dk_buttons_init(button_changed);
+	if(err){
+		LOG_INF("Could not init buttons (err: %d)",err);
+	}
+	
 	return err;
 }
 
@@ -67,6 +109,7 @@ void main(void)
 	int err;
 
 	LOG_INF("Starting Lesson 3 - Exercise 1\n");
+	printk("Running ble example code \n");
 
 	err = dk_leds_init();
 	if (err) {
@@ -81,6 +124,8 @@ void main(void)
 	}
 
 	/* STEP 2.3 - Register our custom callbacks */
+	bt_conn_cb_register(&connection_callbacks);
+
 
 	err = bt_enable(NULL);
 	if (err) {

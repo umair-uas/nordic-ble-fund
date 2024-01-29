@@ -27,9 +27,11 @@ LOG_MODULE_REGISTER(Lesson3_Exercise2, LOG_LEVEL_INF);
 struct bt_conn *my_conn = NULL;
 
 /* STEP 11.2 - Create variable that holds callback for MTU negotiation */
+static struct bt_gatt_exchange_params exchange_params;
 
-/* STEP 13.4 - Forward declaration of exchange_func(): */
-
+/* STEP 13.4 - forward declaration of exchange_func(): */
+static void exchange_func(struct bt_conn *conn, uint8_t att_err,
+			  struct bt_gatt_exchange_params *params);
 #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
 
@@ -50,10 +52,45 @@ static const struct bt_data sd[] = {
 
 /* STEP 7.1 - Define the function to update the connection's PHY */
 
+static void update_phy(struct bt_conn *conn) {
+
+	int err;
+	const struct bt_conn_le_phy_param preferred_phy = {
+		.options = BT_CONN_LE_PHY_OPT_NONE,
+		.pref_rx_phy  = BT_GAP_LE_PHY_2M,/*BT_GAP_LE_PHY_CODED,*/
+		.pref_tx_phy  = BT_GAP_LE_PHY_2M,/*BT_GAP_LE_PHY_CODED,*/
+	};
+	err = bt_conn_le_phy_update(conn,&preferred_phy);
+	if(err) {
+		LOG_ERR("bt_conn_le_phy_update() returned %d",err);
+	}
+}
 /* STEP 10 - Define the function to update the connection's data length */
+
+static void update_data_length(struct bt_conn *conn)
+{
+	int err;
+	struct bt_conn_le_data_len_param my_data_len = {
+		.tx_max_len = BT_GAP_DATA_LEN_MAX,
+		.tx_max_time = BT_GAP_DATA_TIME_MAX,
+	};
+	err = bt_conn_le_data_len_update(my_conn,&my_data_len);
+	if(err){
+		LOG_ERR("data_len_update failed (err %d)",err);
+	}
+}
 
 /* STEP 11.1 - Define the function to update the connection's MTU */
 
+static void update_mtu(struct bt_conn *conn)
+{
+    int err;
+    exchange_params.func = exchange_func;
+    err = bt_gatt_exchange_mtu(conn, &exchange_params);
+    if (err) {
+        LOG_ERR("bt_gatt_exchange_mtu failed (err %d)", err);
+    }
+}
 /* Callbacks */
 void on_connected(struct bt_conn *conn, uint8_t err)
 {
@@ -66,11 +103,23 @@ void on_connected(struct bt_conn *conn, uint8_t err)
 	dk_set_led(CONNECTION_STATUS_LED, 1);
 	/* STEP 1.1 - Declare a structure to store the connection parameters */
 
+	struct bt_conn_info info;
+	err = bt_conn_get_info(conn,&info);
+	if(err) {
+		LOG_ERR("bt_conn_get_info() returned %d",err);
+		return;
+	}
 	/* STEP 1.2 - Add the connection parameters to your log */
-
+	double connection_interval = info.le.interval*1.25; // in ms
+	uint16_t supervision_timeout = info.le.timeout*10; // in ms
+	uint16_t latency 			= info.le.latency;
+	LOG_INF( "Connection parameters updated: interval %.2f ms, latency %d intervals, timeout %d ms",
+		connection_interval,latency,supervision_timeout);
 	/* STEP 7.2 - Update the PHY mode */
-
+	update_phy(my_conn);
 	/* STEP 13.5 - Update the data length and MTU */
+	update_data_length(my_conn);
+	update_mtu(my_conn);
 }
 
 void on_disconnected(struct bt_conn *conn, uint8_t reason)
@@ -82,20 +131,61 @@ void on_disconnected(struct bt_conn *conn, uint8_t reason)
 
 /* STEP 4.2 - Add the callback for connection parameter updates */
 
+void on_le_param_updated(struct bt_conn *conn, uint16_t interval,
+uint16_t latency, uint16_t timeout)
+{
+	double connection_interval = interval * 1.25 ;// in ms
+	uint16_t supervision_timeout = timeout * 10; // in ms
+	LOG_INF( "Connection parameters updated: interval %.2f ms, latency %d intervals, timeout %d ms",
+		connection_interval,latency,supervision_timeout);
+}
 /* STEP 8.1 - Write a callback function to inform about updates in the PHY */
 
+void on_le_phy_updated(struct bt_conn *conn, struct bt_conn_le_phy_info *param)
+{
+	if( param->tx_phy == BT_CONN_LE_TX_POWER_PHY_1M){
+		LOG_INF("PHY updated. New PHY: 1M");
+	}
+	else if ( param->tx_phy == BT_CONN_LE_TX_POWER_PHY_2M){
+		LOG_INF("PHY updated. New PHY: 2M");
+	}
+	else if (param->tx_phy == BT_CONN_LE_TX_POWER_PHY_CODED_S8){
+		LOG_INF("PHY updated. New PHY: Long Range S8 ");
+	}
+	else if (param->tx_phy == BT_CONN_LE_TX_POWER_PHY_CODED_S2){
+		LOG_INF("PHY updated. New PHY: Long Range S2"); // supported on my phone
+	}
+}
 /* STEP 13.1 - Write a callback function to inform about updates in data length */
-
+void on_le_data_len_updated(struct bt_conn *conn, struct bt_conn_le_data_len_info *info)
+{
+    uint16_t tx_len     = info->tx_max_len;
+    uint16_t tx_time    = info->tx_max_time;
+    uint16_t rx_len     = info->rx_max_len;
+    uint16_t rx_time    = info->rx_max_time;
+    LOG_INF("Data length updated. Length %d/%d bytes, time %d/%d us", tx_len, rx_len, tx_time, rx_time);
+}
 struct bt_conn_cb connection_callbacks = {
 	.connected = on_connected,
 	.disconnected = on_disconnected,
 	/* STEP 4.1 - Add the callback for connection parameter updates */
+	.le_param_updated = on_le_param_updated,
 	/* STEP 8.3 - Add the callback for PHY mode updates */
+	.le_phy_updated = on_le_phy_updated,
 	/* STEP 13.2 - Add the callback for data length updates */
+	.le_data_len_updated = on_le_data_len_updated,
 };
 
 /* STEP 13.3 - Implement callback function for MTU exchange */
-
+static void exchange_func(struct bt_conn *conn, uint8_t att_err,
+			  struct bt_gatt_exchange_params *params)
+{
+	LOG_INF("MTU exchange %s", att_err == 0 ? "successful" : "failed");
+    if (!att_err) {
+        uint16_t payload_mtu = bt_gatt_get_mtu(conn) - 3;   // 3 bytes used for Attribute headers.
+        LOG_INF("New MTU: %d bytes", payload_mtu);
+    }
+}
 static void button_changed(uint32_t button_state, uint32_t has_changed)
 {
 	int err;
