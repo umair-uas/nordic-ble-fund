@@ -50,7 +50,8 @@ static const struct bt_data sd[] = {
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
-	if (err) {
+	if (err)
+	{
 		printk("Connection failed (err %u)\n", err);
 		return;
 	}
@@ -74,9 +75,12 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
-	if (!err) {
+	if (!err)
+	{
 		printk("Security changed: %s level %u\n", addr, level);
-	} else {
+	}
+	else
+	{
 		printk("Security failed: %s level %u err %d\n", addr, level, err);
 	}
 }
@@ -132,9 +136,9 @@ static struct bt_conn_auth_cb conn_auth_callbacks = {
 	.cancel = auth_cancel,
 };
 
-static struct bt_conn_auth_info_cb conn_auth_info_callbacks = { .pairing_complete =
-									pairing_complete,
-								.pairing_failed = pairing_failed };
+static struct bt_conn_auth_info_cb conn_auth_info_callbacks = {.pairing_complete =
+																   pairing_complete,
+															   .pairing_failed = pairing_failed};
 #else
 static struct bt_conn_auth_cb conn_auth_callbacks;
 static struct bt_conn_auth_info_cb conn_auth_info_callbacks;
@@ -157,7 +161,8 @@ static struct bt_lbs_cb lbs_callbacs = {
 
 static void button_changed(uint32_t button_state, uint32_t has_changed)
 {
-	if (has_changed & USER_BUTTON) {
+	if (has_changed & USER_BUTTON)
+	{
 		uint32_t user_button_state = button_state & USER_BUTTON;
 
 		bt_lbs_send_button_state(user_button_state);
@@ -170,7 +175,8 @@ static int init_button(void)
 	int err;
 
 	err = dk_buttons_init(button_changed);
-	if (err) {
+	if (err)
+	{
 		printk("Cannot init buttons (err: %d)\n", err);
 	}
 
@@ -185,58 +191,68 @@ void main(void)
 	printk("Starting Bluetooth Peripheral LBS example\n");
 
 	err = dk_leds_init();
-	if (err) {
+	if (err)
+	{
 		printk("LEDs init failed (err %d)\n", err);
 		return;
 	}
 
 	err = init_button();
-	if (err) {
+	if (err)
+	{
 		printk("Button init failed (err %d)\n", err);
 		return;
 	}
 
-	if (IS_ENABLED(CONFIG_BT_LBS_SECURITY_ENABLED)) {
+	if (IS_ENABLED(CONFIG_BT_LBS_SECURITY_ENABLED))
+	{
 		err = bt_conn_auth_cb_register(&conn_auth_callbacks);
-		if (err) {
+		if (err)
+		{
 			printk("Failed to register authorization callbacks.\n");
 			return;
 		}
 
 		err = bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
-		if (err) {
+		if (err)
+		{
 			printk("Failed to register authorization info callbacks.\n");
 			return;
 		}
 	}
 
 	err = bt_enable(NULL);
-	if (err) {
+	if (err)
+	{
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
 	}
 
 	printk("Bluetooth initialized\n");
 
-	if (IS_ENABLED(CONFIG_SETTINGS)) {
+	if (IS_ENABLED(CONFIG_SETTINGS))
+	{
 		settings_load();
 	}
 
 	err = bt_lbs_init(&lbs_callbacs);
-	if (err) {
+	if (err)
+	{
 		printk("Failed to init LBS (err:%d)\n", err);
 		return;
 	}
 
 	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-	if (err) {
+	if (err)
+	{
 		printk("Advertising failed to start (err %d)\n", err);
 		return;
 	}
 
 	printk("Advertising successfully started\n");
 
-	for (;;) {
+	for (;;)
+	{
 		dk_set_led(RUN_STATUS_LED, (++blink_status) % 2);
 		k_sleep(K_MSEC(RUN_LED_BLINK_INTERVAL));
 	}
